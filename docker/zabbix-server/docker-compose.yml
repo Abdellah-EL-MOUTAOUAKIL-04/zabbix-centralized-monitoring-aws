@@ -1,0 +1,77 @@
+version: "3.8"
+
+services:
+  zabbix-db:
+    image: postgres:13
+    container_name: zabbix-db
+    environment:
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_password
+    volumes:
+      - zabbix-db-data:/var/lib/postgresql/data
+    networks:
+      - zabbix-net
+    restart: unless-stopped
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:latest
+    container_name: zabbix-server
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_password
+      ZBX_HISTORYSTORAGEPATH: /var/lib/zabbix/history
+      ZBX_HOUSEKEEPINGFREQUENCY: 1
+    ports:
+      - "10051:10051"
+    volumes:
+      - zabbix-server-data:/var/lib/zabbix
+    depends_on:
+      - zabbix-db
+    networks:
+      - zabbix-net
+    restart: unless-stopped
+
+  zabbix-web:
+    image: zabbix/zabbix-web-apache-pgsql:latest
+    container_name: zabbix-web
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_password
+      PHP_TZ: "Africa/Casablanca"
+    ports:
+      - "80:8080"
+    depends_on:
+      - zabbix-server
+      - zabbix-db
+    networks:
+      - zabbix-net
+    restart: unless-stopped
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:latest
+    container_name: zabbix-agent
+    environment:
+      ZBX_HOSTNAME: "EL-MOUTAOUAKIL-Zabbix-Server"
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_SERVER_PORT: 10051
+    ports:
+      - "10050:10050"
+    networks:
+      - zabbix-net
+    restart: unless-stopped
+    privileged: true
+    pid: "host"
+
+volumes:
+  zabbix-db-data:
+  zabbix-server-data:
+
+networks:
+  zabbix-net:
+    driver: bridge

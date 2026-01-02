@@ -1,0 +1,97 @@
+# Configuration de l'agent Zabbix 2 pour Windows
+# Fichier: C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf
+# Projet: AWS Zabbix Monitoring
+# Auteur: EL MOUTAOUAKIL Abdellah
+
+# Paramètres de base
+LogFile=C:\Program Files\Zabbix Agent 2\zabbix_agent2.log
+
+# Configuration du serveur Zabbix
+Server=52.207.237.42
+ServerActive=52.207.237.42
+
+# Identification de l'hôte
+Hostname=EL-MOUTAOUAKIL-Windows-Client
+
+# Configuration réseau
+ListenPort=10050
+
+# Paramètres de performance
+BufferSend=5
+BufferSize=100
+Timeout=3
+
+# Monitoring des performances Windows
+PerfCounter=\Processor(_Total)\% Processor Time,900
+PerfCounter=\Memory\Available MBytes,60
+PerfCounter=\Memory\% Committed Bytes In Use,60
+PerfCounter=\LogicalDisk(_Total)\% Free Space,600
+PerfCounter=\LogicalDisk(_Total)\Free Megabytes,600
+PerfCounter=\System\Processor Queue Length,60
+PerfCounter=\System\Processes,60
+PerfCounter=\System\Threads,60
+
+# Monitoring réseau Windows
+PerfCounter=\Network Interface(*)\Bytes Total/sec,60
+PerfCounter=\Network Interface(*)\Packets/sec,60
+PerfCounter=\Network Interface(*)\Packets Received Errors,300
+PerfCounter=\Network Interface(*)\Packets Outbound Errors,300
+
+# Monitoring disque Windows
+PerfCounter=\PhysicalDisk(_Total)\Disk Reads/sec,60
+PerfCounter=\PhysicalDisk(_Total)\Disk Writes/sec,60
+PerfCounter=\PhysicalDisk(_Total)\% Disk Time,60
+PerfCounter=\PhysicalDisk(_Total)\Avg. Disk Queue Length,60
+
+# User Parameters personnalisés pour Windows
+UserParameter=custom.windows.version,powershell -Command "(Get-WmiObject Win32_OperatingSystem).Caption"
+UserParameter=custom.windows.uptime,powershell -Command "(Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime | Select-Object -ExpandProperty TotalSeconds"
+UserParameter=custom.windows.reboot.required,powershell -Command "if (Get-ChildItem 'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired' -ErrorAction SilentlyContinue) { 1 } else { 0 }"
+
+# Monitoring des services Windows critiques
+UserParameter=service.windows.eventlog,powershell -Command "(Get-Service EventLog).Status"
+UserParameter=service.windows.rpcss,powershell -Command "(Get-Service RpcSs).Status"
+UserParameter=service.windows.winmgmt,powershell -Command "(Get-Service Winmgmt).Status"
+UserParameter=service.windows.dhcp,powershell -Command "try { (Get-Service Dhcp).Status } catch { 'NotInstalled' }"
+UserParameter=service.windows.dns,powershell -Command "try { (Get-Service DNS).Status } catch { 'NotInstalled' }"
+UserParameter=service.windows.iis,powershell -Command "try { (Get-Service W3SVC).Status } catch { 'NotInstalled' }"
+UserParameter=service.windows.mssql,powershell -Command "try { (Get-Service | Where-Object {$_.Name -like '*SQL*'} | Select-Object -First 1).Status } catch { 'NotInstalled' }"
+
+# Monitoring de sécurité Windows
+UserParameter=security.windows.failed.logins,powershell -Command "(Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4625; StartTime=(Get-Date).AddHours(-1)} -ErrorAction SilentlyContinue | Measure-Object).Count"
+UserParameter=security.windows.rdp.sessions,powershell -Command "(quser 2>$null | Select-Object -Skip 1 | Measure-Object).Count"
+UserParameter=security.windows.firewall.status,powershell -Command "if ((Get-NetFirewallProfile | Where-Object {$_.Enabled -eq $false}).Count -eq 0) { 'Enabled' } else { 'Disabled' }"
+
+# Monitoring disque avancé Windows
+UserParameter=disk.windows.free[*],powershell -Command "Get-WmiObject -Class Win32_LogicalDisk | Where-Object {$_.DeviceID -eq '$1'} | Select-Object -ExpandProperty FreeSpace"
+UserParameter=disk.windows.size[*],powershell -Command "Get-WmiObject -Class Win32_LogicalDisk | Where-Object {$_.DeviceID -eq '$1'} | Select-Object -ExpandProperty Size"
+UserParameter=disk.windows.used[*],powershell -Command "$disk = Get-WmiObject -Class Win32_LogicalDisk | Where-Object {$_.DeviceID -eq '$1'}; $disk.Size - $disk.FreeSpace"
+
+# Monitoring mémoire avancé Windows
+UserParameter=memory.windows.physical.total,powershell -Command "(Get-WmiObject Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum"
+UserParameter=memory.windows.virtual.total,powershell -Command "(Get-WmiObject Win32_OperatingSystem).TotalVirtualMemorySize"
+UserParameter=memory.windows.page.file.usage,powershell -Command "[math]::Round((Get-WmiObject Win32_PageFileUsage).CurrentUsage / (Get-WmiObject Win32_PageFileUsage).AllocatedBaseSize * 100, 2)"
+
+# Monitoring CPU avancé Windows
+UserParameter=cpu.windows.cores,powershell -Command "(Get-WmiObject Win32_ComputerSystem).NumberOfProcessors"
+UserParameter=cpu.windows.logical.processors,powershell -Command "(Get-WmiObject Win32_ComputerSystem).NumberOfLogicalProcessors"
+UserParameter=cpu.windows.temperature,powershell -Command "try { (Get-WmiObject -Namespace 'root/wmi' -Class MSAcpi_ThermalZoneTemperature | Select-Object -ExpandProperty CurrentTemperature | ForEach-Object { ($_ / 10) - 273.15 } | Measure-Object -Average).Average } catch { 0 }"
+
+# Monitoring réseau avancé Windows
+UserParameter=network.windows.adapters.count,powershell -Command "(Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Measure-Object).Count"
+UserParameter=network.windows.tcp.connections,powershell -Command "(Get-NetTCPConnection | Where-Object {$_.State -eq 'Established'} | Measure-Object).Count"
+UserParameter=network.windows.udp.endpoints,powershell -Command "(Get-NetUDPEndpoint | Measure-Object).Count"
+
+# Monitoring processus Windows
+UserParameter=process.windows.count,powershell -Command "(Get-Process | Measure-Object).Count"
+UserParameter=process.windows.top.cpu[*],powershell -Command "(Get-Process | Sort-Object CPU -Descending | Select-Object -First $1 -ExpandProperty ProcessName) -join ','"
+UserParameter=process.windows.top.memory[*],powershell -Command "(Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First $1 -ExpandProperty ProcessName) -join ','"
+
+# Monitoring événements Windows
+UserParameter=events.windows.system.errors,powershell -Command "(Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=(Get-Date).AddHours(-1)} -ErrorAction SilentlyContinue | Measure-Object).Count"
+UserParameter=events.windows.application.errors,powershell -Command "(Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2; StartTime=(Get-Date).AddHours(-1)} -ErrorAction SilentlyContinue | Measure-Object).Count"
+UserParameter=events.windows.security.warnings,powershell -Command "(Get-WinEvent -FilterHashtable @{LogName='Security'; Level=3; StartTime=(Get-Date).AddHours(-1)} -ErrorAction SilentlyContinue | Measure-Object).Count"
+
+# Monitoring mises à jour Windows
+UserParameter=updates.windows.pending,powershell -Command "if (Get-Module -ListAvailable PSWindowsUpdate) { (Get-WUList -MicrosoftUpdate | Measure-Object).Count } else { 'Module PSWindowsUpdate non installé' }"
+UserParameter=updates.windows.last.installed,powershell -Command "(Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 1 -ExpandProperty InstalledOn).ToString('yyyy-MM-dd')"

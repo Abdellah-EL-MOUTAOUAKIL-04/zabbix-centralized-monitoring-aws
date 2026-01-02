@@ -1,0 +1,69 @@
+# Configuration de l'agent Zabbix pour Linux
+# Fichier: /etc/zabbix/zabbix_agentd.conf
+# Projet: AWS Zabbix Monitoring
+# Auteur: EL MOUTAOUAKIL Abdellah
+
+# Paramètres de base
+PidFile=/var/run/zabbix/zabbix_agentd.pid
+LogFile=/var/log/zabbix/zabbix_agentd.log
+LogFileSize=0
+
+# Configuration du serveur Zabbix
+Server=52.207.237.42
+ServerActive=52.207.237.42
+
+# Identification de l'hôte
+Hostname=EL-MOUTAOUAKIL-Linux-Client
+
+# Configuration réseau
+ListenPort=10050
+ListenIP=0.0.0.0
+
+# Paramètres de performance
+StartAgents=3
+Timeout=3
+UnsafeUserParameters=0
+AllowRoot=0
+
+# Paramètres de buffer
+BufferSend=5
+BufferSize=100
+
+# Répertoire pour configurations additionnelles
+Include=/etc/zabbix/zabbix_agentd.d/*.conf
+
+# User Parameters personnalisés pour monitoring avancé
+UserParameter=custom.ping[*],ping -c 1 $1 | grep -c "1 received"
+UserParameter=custom.disk.free[*],df -h $1 | awk 'NR==2 {print $4}'
+UserParameter=custom.cpu.usage,top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1
+UserParameter=custom.memory.usage,free | grep Mem | awk '{printf "%.1f", ($3/$2) * 100.0}'
+UserParameter=custom.disk.io[*],iostat -x 1 1 | grep $1 | awk '{print $4}'
+UserParameter=custom.network.bytes[*],cat /proc/net/dev | grep $1 | awk '{print $2}'
+UserParameter=custom.process.count[*],pgrep $1 | wc -l
+UserParameter=custom.log.error[*],grep -c "ERROR" $1
+UserParameter=custom.service.status[*],systemctl is-active $1
+
+# Monitoring des services critiques
+UserParameter=service.ssh,systemctl is-active ssh
+UserParameter=service.apache,systemctl is-active apache2 2>/dev/null || echo "inactive"
+UserParameter=service.mysql,systemctl is-active mysql 2>/dev/null || echo "inactive"
+UserParameter=service.docker,systemctl is-active docker 2>/dev/null || echo "inactive"
+
+# Monitoring de sécurité
+UserParameter=security.failed.logins,grep "Failed password" /var/log/auth.log | wc -l
+UserParameter=security.ssh.connections,ss -tn | grep :22 | wc -l
+UserParameter=security.sudo.usage,grep "sudo" /var/log/auth.log | tail -10 | wc -l
+
+# Monitoring système avancé
+UserParameter=system.uptime,uptime | awk '{print $3}' | sed 's/,//'
+UserParameter=system.load.1min,uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//'
+UserParameter=system.load.5min,uptime | awk -F'load average:' '{print $2}' | awk '{print $2}' | sed 's/,//'
+UserParameter=system.load.15min,uptime | awk -F'load average:' '{print $2}' | awk '{print $3}'
+UserParameter=system.temp.cpu,sensors | grep "Core 0" | awk '{print $3}' | cut -c2-3 2>/dev/null || echo "0"
+
+# Monitoring réseau avancé
+UserParameter=network.tcp.connections,ss -t | grep ESTAB | wc -l
+UserParameter=network.udp.connections,ss -u | grep -v "State" | wc -l
+UserParameter=network.interface.status[*],cat /sys/class/net/$1/operstate 2>/dev/null || echo "down"
+UserParameter=network.bandwidth.rx[*],cat /sys/class/net/$1/statistics/rx_bytes 2>/dev/null || echo "0"
+UserParameter=network.bandwidth.tx[*],cat /sys/class/net/$1/statistics/tx_bytes 2>/dev/null || echo "0"
